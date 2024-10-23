@@ -124,7 +124,7 @@ public class UserPdfController {
         String pdfPath = uploadDirPdfs + user.getFullName().replaceAll(" ", "") + "_" + userId + ".pdf";
         try {
             file.transferTo(new File(pdfPath));
-            logger.info("PDF actualizado en: {}", pdfPath);
+            logger.info("PDF actualizado en: {}", pdfPath);    
             userPdf.setPdfPath(pdfPath);
             userPdfRepository.save(userPdf);
         } catch (IOException e) {

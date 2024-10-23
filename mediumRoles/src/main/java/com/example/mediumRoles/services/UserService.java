@@ -2,8 +2,11 @@ package com.example.mediumRoles.services;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -11,6 +14,7 @@ import org.springframework.stereotype.Service;
 import com.example.mediumRoles.dtos.UserDTO;
 import com.example.mediumRoles.entities.User;
 import com.example.mediumRoles.repositories.UserRepository;
+
 
 
 
@@ -22,6 +26,21 @@ public class UserService {
     @Autowired
     public UserService(UserRepository userRepository) {
         this.userRepository = userRepository;
+    }
+
+    @Cacheable(value = "users", key = "'allUsers'")
+    public List<UserDTO> getAllUsers() {
+        // Lógica para obtener usuarios de la base de datos
+        return userRepository.findAll().stream()
+            .map(this::convertToDTO)
+            .collect(Collectors.toList());
+    }
+
+    // Método para obtener usuarios cacheados
+    @Cacheable(value = "users", key = "'cachedUsers'")
+    public List<UserDTO> getCachedUsers() {
+        // Simplemente llama a getAllUsers() para obtener los usuarios en caché
+        return getAllUsers();
     }
 
     // Método para encontrar un usuario por nombre completo
@@ -38,6 +57,12 @@ public class UserService {
     // Método para convertir User a UserDTO
     private UserDTO convertToDTO(User user) {
         return new UserDTO(user.getId(), user.getFullName(), user.getEmail());
+    }
+
+    // Método para encontrar un usuario por ID
+    public UserDTO findById(Long userId) {
+        Optional<User> user = userRepository.findById(userId); // Busca el usuario por ID
+        return user.isPresent() ? convertToDTO(user.get()) : null; // Convierte a UserDTO si existe
     }
 
     // Método adicional para buscar por nombre y paginación

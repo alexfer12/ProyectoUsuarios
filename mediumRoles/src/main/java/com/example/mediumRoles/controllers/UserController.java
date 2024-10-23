@@ -28,6 +28,7 @@ import com.example.mediumRoles.exceptions.CustomPagedResponse;
 import com.example.mediumRoles.services.UserService;
 
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.*;
+
 @RequestMapping("/users")
 @RestController
 public class UserController {
@@ -36,37 +37,43 @@ public class UserController {
     public UserController(UserService userService) {
         this.userService = userService;
     }
-
-    @GetMapping("/") // Endpoint para buscar usuarios por nombre o devolver todos
-    public ResponseEntity<?> allUsers(
-            @RequestParam(required = false) String fullName, // Parámetro opcional para búsqueda
+ // Endpoint para buscar usuarios por userId o fullName, o devolver todos
+    @GetMapping("/")
+    public ResponseEntity<?> getUsers(
+            @RequestParam(required = false) String fullName, // Parámetro opcional para búsqueda por nombre
+            @RequestParam(required = false) Long userId,     // Parámetro opcional para búsqueda por ID
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "id") String sort,
-            @RequestParam(defaultValue = "asc") String direction) { // Añadir dirección de ordenación
+            @RequestParam(defaultValue = "asc") String direction) {
+
         try {
             // Determinar la dirección de ordenación
             Sort sortOrder = direction.equalsIgnoreCase("desc") ? Sort.by(sort).descending() : Sort.by(sort).ascending();
-            Pageable pageable = PageRequest.of(page, size, sortOrder); // Soporta ordenación
-            Page<UserDTO> usersPage;
+            Pageable pageable = PageRequest.of(page, size, sortOrder);
 
-            // Si se proporciona el nombre, busca usuarios por ese nombre
-            if (fullName != null && !fullName.isEmpty()) {
-                // Busca un único usuario por nombre completo
-                UserDTO userDTO = userService.findByFullName(fullName);
-                if (userDTO == null) {
-                    return ResponseEntity.notFound().build(); // Retornar 404 si no se encuentra el usuario
+            // Si se proporciona un userId, buscar por ID
+            if (userId != null) {
+                UserDTO userDTO = userService.findById(userId);
+                if (userDTO != null) {
+                    return ResponseEntity.ok(userDTO); // Retorna el usuario si se encuentra por ID
+                } else {
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado.");
                 }
-                // Devolver el usuario encontrado sin HATEOAS
-                return ResponseEntity.ok(EntityModel.of(userDTO)); // Esto no causará un error de tipo
+            }
+
+            // Si se proporciona un fullName, buscar por nombre
+            Page<UserDTO> usersPage;
+            if (fullName != null && !fullName.isEmpty()) {
+                usersPage = userService.findByFullName(fullName, pageable);
             } else {
-                // Si no se proporciona el nombre, obtiene todos los usuarios
+                // Si no se proporciona ni userId ni fullName, devolver todos los usuarios
                 usersPage = userService.findAllUsers(pageable);
             }
 
-            // Si la lista está vacía, retorna un mensaje adecuado
+            // Si no se encontraron usuarios, retornar 404
             if (usersPage.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("No se encontraron usuarios.");
             }
 
             // Crear modelo paginado HATEOAS
@@ -79,48 +86,50 @@ public class UserController {
             );
 
             // Agregar enlaces HATEOAS para cada usuario
-            for (UserDTO user : usersPage.getContent()) {
-                Link selfLink = WebMvcLinkBuilder.linkTo(methodOn(UserController.class).getUserByFullName(user.getFullName())).withSelfRel();
+            usersPage.getContent().forEach(user -> {
+                Link selfLink = WebMvcLinkBuilder.linkTo(methodOn(UserController.class)
+                        .getUsers(user.getFullName(), null, page, size, sort, direction)).withSelfRel();
                 response.add(selfLink);
-            }
+            });
 
             // Añadir enlace a la página anterior y siguiente si existen
             if (usersPage.hasPrevious()) {
                 Link previousLink = WebMvcLinkBuilder.linkTo(methodOn(UserController.class)
-                        .allUsers(fullName, page - 1, size, sort, direction)).withRel("previous");
+                        .getUsers(fullName, null, page - 1, size, sort, direction)).withRel("previous");
                 response.add(previousLink);
             }
             if (usersPage.hasNext()) {
                 Link nextLink = WebMvcLinkBuilder.linkTo(methodOn(UserController.class)
-                        .allUsers(fullName, page + 1, size, sort, direction)).withRel("next");
+                        .getUsers(fullName, null, page + 1, size, sort, direction)).withRel("next");
                 response.add(nextLink);
             }
 
             // Agregar enlaces para la primera y última página
             response.add(WebMvcLinkBuilder.linkTo(methodOn(UserController.class)
-                    .allUsers(fullName, 0, size, sort, direction)).withRel("first"));
+                    .getUsers(fullName, null, 0, size, sort, direction)).withRel("first"));
             if (usersPage.getTotalPages() > 0) {
                 response.add(WebMvcLinkBuilder.linkTo(methodOn(UserController.class)
-                        .allUsers(fullName, usersPage.getTotalPages() - 1, size, sort, direction)).withRel("last"));
+                        .getUsers(fullName, null, usersPage.getTotalPages() - 1, size, sort, direction)).withRel("last"));
             }
 
             return ResponseEntity.ok(response);
+
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error al procesar la solicitud.");
         }
     }
 
-    @GetMapping("/byFullName") // Endpoint para buscar usuario por nombre completo
-    public ResponseEntity<EntityModel<UserDTO>> getUserByFullName(@RequestParam String fullName) {
-        UserDTO userDTO = userService.findByFullName(fullName); // Llamamos al servicio
-        if (userDTO == null) {
-            return ResponseEntity.notFound().build();
+    // Nuevo endpoint para obtener usuarios cacheados
+    @GetMapping("/cache")
+    public ResponseEntity<List<UserDTO>> getCachedUsers() {
+        try {
+            List<UserDTO> cachedUsers = userService.getCachedUsers();
+            if (cachedUsers == null || cachedUsers.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null); // 404 si no hay usuarios en caché
+            }
+            return ResponseEntity.ok(cachedUsers);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null); // 500 en caso de error
         }
-
-        EntityModel<UserDTO> userResource = EntityModel.of(userDTO);
-        Link selfLink = WebMvcLinkBuilder.linkTo(methodOn(UserController.class).getUserByFullName(fullName)).withSelfRel();
-        userResource.add(selfLink);
-
-        return ResponseEntity.ok(userResource);
     }
 }

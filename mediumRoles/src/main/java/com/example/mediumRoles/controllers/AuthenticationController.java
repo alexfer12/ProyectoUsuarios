@@ -19,10 +19,9 @@ import com.example.mediumRoles.exceptions.InvalidCredentialsException;
 import com.example.mediumRoles.exceptions.UserAlreadyExistsException;
 import com.example.mediumRoles.services.AuthenticationService;
 import com.example.mediumRoles.services.JwtService;
+import com.example.mediumRoles.services.UserService;
 
 import jakarta.validation.Valid;
-
-
 @RequestMapping("/auth")
 @RestController
 public class AuthenticationController {

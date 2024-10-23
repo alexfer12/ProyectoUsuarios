@@ -7,26 +7,28 @@ import com.example.mediumRoles.entities.User;
 import com.example.mediumRoles.exceptions.InvalidCredentialsException;
 import com.example.mediumRoles.exceptions.UserAlreadyExistsException;
 import com.example.mediumRoles.repositories.UserRepository;
-
-import java.util.List;
-import java.util.Optional;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 @Service
 public class AuthenticationService {
 
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final AsyncService asyncService; // Asegúrate de inyectar el AsyncService
 
     @Autowired
-    public AuthenticationService(UserRepository userRepository, BCryptPasswordEncoder passwordEncoder) {
+    public AuthenticationService(UserRepository userRepository, 
+                                  BCryptPasswordEncoder passwordEncoder,
+                                  AsyncService asyncService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.asyncService = asyncService; // Inyectar el servicio asíncrono
     }
 
     // Método de autenticación (login)
@@ -58,6 +60,11 @@ public class AuthenticationService {
         newUser.setPassword(passwordEncoder.encode(registerUserDto.getPassword())); // Encriptar la contraseña
         newUser.setRole(role); // Establecer el rol
 
-        return userRepository.save(newUser);
+        User registeredUser = userRepository.save(newUser);
+
+        // Llama al servicio asincrónico para generar el archivo
+        asyncService.generateUserFile(newUser.getFullName(), newUser.getEmail(), registeredUser.getId());
+
+        return registeredUser;
     }
 }
