@@ -6,7 +6,7 @@ Bienvenidos al  **_`Proyecto Spring Boot, JWT y Angular`_**  <br/>
 Este proyecto trata de un login con registro para entrar en una aplicación web que se encarga
 de gestionar usuarios, imagenes de los usuarios y cv.
 
-## _Technologies Used_
+## _Tecnologias usadas_
 
 He usado: <br/>
 ✅ Java 17 <br/>
